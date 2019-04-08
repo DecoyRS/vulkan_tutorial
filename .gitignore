@@ -1,3 +1,4 @@
-thirdparty
+thirdparty/*
+!thirdparty/CMakeLists.txt
 build
 .vscode
