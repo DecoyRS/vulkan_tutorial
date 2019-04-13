@@ -1,6 +1,7 @@
 @echo off
 
 REM get thirdparty libs
+mkdir thirdparty
 pushd thirdparty
 
 REM GLFW

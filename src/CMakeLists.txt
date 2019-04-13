@@ -1,9 +1,7 @@
 find_package(Vulkan REQUIRED)
 
 set(SOURCE
-    main.cpp
-    render_application.cpp
-    render_application.hpp
+    app.cpp
 )
 add_executable(vulkan_tutorial ${SOURCE})
 set_target_properties(vulkan_tutorial PROPERTIES FOLDER "Apps")
