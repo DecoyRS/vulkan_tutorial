@@ -102,6 +102,7 @@ private:
 
     VkInstance instance;
     VkDebugUtilsMessengerEXT callback;
+    VkPhysicalDevice physicalDevice = nullptr;
 
     bool createInstance()
     {
@@ -168,11 +169,45 @@ private:
         return true;
     }
 
+    bool isDeviceSuitable(const VkPhysicalDevice& device) {
+        VkPhysicalDeviceProperties properties;
+        vkGetPhysicalDeviceProperties(device, &properties);
+
+        VkPhysicalDeviceFeatures features;
+        vkGetPhysicalDeviceFeatures(device, &features);
+
+        auto indices = findQueueFamilies(device);
+        
+        return VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU == properties.deviceType &&
+            features.geometryShader && indices.isComplete();
+    }
+
+    bool pickPhysicalDevice() {
+        uint32_t deviceCount = 0;
+        vkEnumeratePhysicalDevices(instance, &deviceCount, nullptr);
+
+        if(deviceCount == 0) return false;
+
+        std::vector<VkPhysicalDevice> physicalDevices(deviceCount);
+        vkEnumeratePhysicalDevices(instance, &deviceCount, physicalDevices.data());
+
+        for(const auto& device: physicalDevices) {
+            // TODO: check for multiple GPU's and select appropriate one (page 64)
+            if(isDeviceSuitable(device)) {
+                physicalDevice = device;
+                break;
+            }
+        }
+
+        return false;
+    }
+
     bool initVulkan()
     {
         return
         createInstance() &&
-        setupDebugCallback();
+        setupDebugCallback() &&
+        pickPhysicalDevice();
     }
     void mainLoop()
     {
@@ -191,6 +226,39 @@ private:
 
         glfwTerminate();
     }
+
+    struct QueueFamilyIndices
+    {
+        int graphicsFamily = -1;
+
+        bool isComplete() const {
+            return graphicsFamily >= 0;
+        }
+    };
+
+    QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device) {
+        QueueFamilyIndices indices;
+
+        uint32_t queueFamilyCount = 0;
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, nullptr);
+
+        std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
+        vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies.data());
+
+        int i = 0;
+        for(const auto& queueFamily : queueFamilies) {
+            if(queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
+                indices.graphicsFamily = i;
+            }
+
+            if(indices.isComplete()) break;
+
+            ++i;
+        }
+
+        return indices;
+    }
+    
     GLFWwindow* window = nullptr;
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
