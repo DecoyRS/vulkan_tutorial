@@ -202,12 +202,33 @@ private:
         return false;
     }
 
+    bool createLogicalDevice() {
+        QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
+
+        VkDeviceQueueCreateInfo queueCreateInfo = {};
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+        queueCreateInfo.queueCount = 1;
+
+        constexpr float queuePriority = 1.0f;
+        queueCreateInfo.pQueuePriorities = &queuePriority;
+
+        VkPhysicalDeviceFeatures deviceFeatures = {};
+
+        VkDeviceCreateInfo createInfo = {};
+        createInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+        createInfo.pQueueCreateInfos = &queueCreateInfo;
+        
+        return true;
+    }
+
     bool initVulkan()
     {
         return
         createInstance() &&
         setupDebugCallback() &&
-        pickPhysicalDevice();
+        pickPhysicalDevice() &&
+        createLogicalDevice();
     }
     void mainLoop()
     {
@@ -260,6 +281,8 @@ private:
     }
     
     GLFWwindow* window = nullptr;
+    VkDevice device;
+    
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
 };
