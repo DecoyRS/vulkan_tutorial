@@ -19,10 +19,11 @@ namespace
     enum class ERRORS : uint32_t
     {
         _START = 0xdead0000,
-        REQUESTED_VALIDATION_LAYERS_ARE_NOT_AVAILABLE
+        REQUESTED_VALIDATION_LAYERS_ARE_NOT_AVAILABLE,
+        FAILED_TO_CREATE_LOGICAL_DEVICE
     };
 
-    bool quit_application(ERRORS error) {
+    void quit_application(ERRORS error) {
         exit(static_cast<uint32_t>(error));
     }
 
@@ -221,10 +222,21 @@ private:
 
         createInfo.enabledExtensionCount = 0;
         if (ENABLE_VALIDATION_LAYERS) {
-
+            createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
+            createInfo.ppEnabledLayerNames = validationLayers.data();
+        } else {
+            createInfo.enabledLayerCount = 0;
         }
 
-        return true;
+        if(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) == VK_SUCCESS) {
+            // The parameters are the logical device, queue family, queue index and a pointer to the variable to store the queue handle in.
+            // Because we’re only creating a single queue from this family, we’ll simply use index 0.
+            vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
+            return true;
+        };
+
+        quit_application(ERRORS::FAILED_TO_CREATE_LOGICAL_DEVICE);
+        return false;
     }
 
     bool initVulkan() {
@@ -243,6 +255,8 @@ private:
 
     void cleanup() {
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
+
+        vkDestroyDevice(device, nullptr);
 
         vkDestroyInstance(instance, nullptr);
 
@@ -285,6 +299,7 @@ private:
 
     GLFWwindow* window = nullptr;
     VkDevice device;
+    VkQueue graphicsQueue;
 
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
