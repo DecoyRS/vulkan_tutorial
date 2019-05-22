@@ -20,7 +20,8 @@ namespace
     {
         _START = 0xdead0000,
         REQUESTED_VALIDATION_LAYERS_ARE_NOT_AVAILABLE,
-        FAILED_TO_CREATE_LOGICAL_DEVICE
+        FAILED_TO_CREATE_LOGICAL_DEVICE,
+        FAILED_TO_CREATE_WINDOW_SURFACE
     };
 
     void quit_application(ERRORS error) {
@@ -100,10 +101,6 @@ private:
 
         return true;
     }
-
-    VkInstance instance;
-    VkDebugUtilsMessengerEXT callback;
-    VkPhysicalDevice physicalDevice = nullptr;
 
     bool createInstance() {
         if (ENABLE_VALIDATION_LAYERS && !checkValidationLayerSupport()) {
@@ -194,7 +191,7 @@ private:
             // TODO: check for multiple GPU's and select appropriate one (page 64)
             if (isDeviceSuitable(device)) {
                 physicalDevice = device;
-                break;
+                return true;
             }
         }
 
@@ -204,9 +201,11 @@ private:
     bool createLogicalDevice() {
         QueueFamilyIndices indices = findQueueFamilies(physicalDevice);
 
+        // [AP] NB: I'm drifting from tutorial on purpose as I'm using the same queue from graphics and presentation and
+        // I don't need to create multiple queues
         VkDeviceQueueCreateInfo queueCreateInfo = {};
-        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-        queueCreateInfo.queueFamilyIndex = indices.graphicsFamily;
+        queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+        queueCreateInfo.queueFamilyIndex = indices.graphicsAndPresentFamily;
         queueCreateInfo.queueCount = 1;
 
         constexpr float queuePriority = 1.0f;
@@ -231,7 +230,7 @@ private:
         if(vkCreateDevice(physicalDevice, &createInfo, nullptr, &device) == VK_SUCCESS) {
             // The parameters are the logical device, queue family, queue index and a pointer to the variable to store the queue handle in.
             // Because we’re only creating a single queue from this family, we’ll simply use index 0.
-            vkGetDeviceQueue(device, indices.graphicsFamily, 0, &graphicsQueue);
+            vkGetDeviceQueue(device, indices.graphicsAndPresentFamily, 0, &graphicsQueue);
             return true;
         };
 
@@ -239,10 +238,20 @@ private:
         return false;
     }
 
+    bool createSurface() {
+        if(glfwCreateWindowSurface(instance, window, nullptr, &surface) == VK_SUCCESS) {
+            return true;
+        }
+
+        quit_application(ERRORS::FAILED_TO_CREATE_WINDOW_SURFACE);
+        return false;
+    }
+
     bool initVulkan() {
         return
             createInstance() &&
             setupDebugCallback() &&
+            createSurface() &&
             pickPhysicalDevice() &&
             createLogicalDevice();
     }
@@ -258,6 +267,7 @@ private:
 
         vkDestroyDevice(device, nullptr);
 
+        vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyInstance(instance, nullptr);
 
         glfwDestroyWindow(window);
@@ -267,10 +277,10 @@ private:
 
     struct QueueFamilyIndices
     {
-        int graphicsFamily = -1;
+        int graphicsAndPresentFamily = -1;
 
         bool isComplete() const {
-            return graphicsFamily >= 0;
+            return graphicsAndPresentFamily >= 0;
         }
     };
 
@@ -285,8 +295,13 @@ private:
 
         int i = 0;
         for (const auto& queueFamily : queueFamilies) {
-            if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-                indices.graphicsFamily = i;
+            // Note that it’s very likely that these end up being the same queue family after all, but throughout the program we will treat them as if they were separate queues for a uniform approach.
+            // Nevertheless, you could add logic to explicitly prefer a physical device that supports drawing and presentation in the same queue for improved performance
+            // [AP] I've decided to go with later approach, only using device that is supporting both
+            VkBool32 presentSupport = false;
+            vkGetPhysicalDeviceSurfaceSupportKHR(device, i, surface, &presentSupport);
+            if (queueFamily.queueCount > 0 && queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT && presentSupport) {
+                indices.graphicsAndPresentFamily = i;
             }
 
             if (indices.isComplete()) break;
@@ -296,6 +311,13 @@ private:
 
         return indices;
     }
+    
+
+    VkInstance instance;
+    VkDebugUtilsMessengerEXT callback;
+    VkSurfaceKHR surface;
+    
+    VkPhysicalDevice physicalDevice = nullptr;
 
     GLFWwindow* window = nullptr;
     VkDevice device;
