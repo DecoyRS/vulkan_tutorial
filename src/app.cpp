@@ -1,14 +1,21 @@
+#include "debug_utils.hpp"
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+
+#define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/vec4.hpp>
+#include <glm/mat4x4.hpp>
+
 #include <vector>
 #include <iostream>
-#include "debug_utils.hpp"
 #include <unordered_set>
 #include <algorithm>
 
 namespace
 {
-#ifdef VALIDATION_LAYERS
+#ifdef NDEBUG
     constexpr bool ENABLE_VALIDATION_LAYERS = false;
 #else
     constexpr bool ENABLE_VALIDATION_LAYERS = true;
@@ -224,15 +231,15 @@ private:
 
     VkPresentModeKHR choosePresentMode(const std::vector<VkPresentModeKHR> availablePresentModes) {
         auto best_mode = VK_PRESENT_MODE_FIFO_KHR;
-        // for (const auto& present_mode : availablePresentModes) {
-        //     if(present_mode == VK_PRESENT_MODE_MAILBOX_KHR) return present_mode;
-        //     if(present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) best_mode = present_mode;
-        // }
+		for (const auto& present_mode : availablePresentModes) {
+			if (present_mode == VK_PRESENT_MODE_MAILBOX_KHR) return present_mode;
+			if (present_mode == VK_PRESENT_MODE_IMMEDIATE_KHR) best_mode = present_mode;
+		}
         return best_mode;
     }
 
     VkExtent2D chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
-        if(capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+        if(capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max() && capabilities.currentExtent.height != std::numeric_limits<uint32_t>::max())
             return capabilities.currentExtent;
 
         VkExtent2D extent = {WIDTH, HEIGHT};
@@ -279,6 +286,11 @@ private:
         create_info_khr.oldSwapchain = VK_NULL_HANDLE;
         
         if(vkCreateSwapchainKHR(device, &create_info_khr, nullptr, &swapchain) == VK_SUCCESS) {
+            vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr);
+            swapChainImages.resize(imageCount);
+            vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapChainImages.data());
+            format_ = format_khr.format;
+            extent_2d_ = extent_2d;
             return true;
         }
 
@@ -330,7 +342,6 @@ private:
         createInfo.enabledExtensionCount = static_cast<uint32_t>(deviceExtensions.size());
         createInfo.ppEnabledExtensionNames = deviceExtensions.data();
 
-        createInfo.enabledExtensionCount = 0;
         if (ENABLE_VALIDATION_LAYERS) {
             createInfo.enabledLayerCount = static_cast<uint32_t>(validationLayers.size());
             createInfo.ppEnabledLayerNames = validationLayers.data();
@@ -460,6 +471,10 @@ private:
     GLFWwindow* window = nullptr;
     VkDevice device;
     VkQueue graphicsQueue;
+
+    std::vector<VkImage> swapChainImages;
+    VkFormat format_;
+    VkExtent2D extent_2d_;
 
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
