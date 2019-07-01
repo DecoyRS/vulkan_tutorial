@@ -35,7 +35,8 @@ namespace
         REQUESTED_VALIDATION_LAYERS_ARE_NOT_AVAILABLE,
         FAILED_TO_CREATE_LOGICAL_DEVICE,
         FAILED_TO_CREATE_WINDOW_SURFACE,
-        FAILED_TO_CREATE_SWAP_CHAIN
+        FAILED_TO_CREATE_SWAP_CHAIN,
+        FAILED_TO_CREATE_IMAGE_VIEWS
     };
 
     void quit_application(ERRORS error) {
@@ -369,6 +370,34 @@ private:
         return false;
     }
 
+    bool createImageViews() {
+        swapChainImageViews.resize(swapChainImages.size());
+        for (int i = 0; i < swapChainImages.size(); i++) {
+            VkImageViewCreateInfo create_info = {};
+            create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            create_info.image = swapChainImages.at(i);
+
+            // viewType - treat images as 1D, 2D, 3D textures or cube maps
+            create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            create_info.format = format_;
+            create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+            create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+            create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            create_info.subresourceRange.baseMipLevel = 0;
+            create_info.subresourceRange.levelCount = 1;
+            create_info.subresourceRange.baseArrayLayer = 0;
+            create_info.subresourceRange.layerCount = 1;
+            if(vkCreateImageView(device, &create_info, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
+                quit_application(ERRORS::FAILED_TO_CREATE_IMAGE_VIEWS);
+                return false;
+            }
+        } 
+        return true;
+    }
+
     bool initVulkan() {
         return
             createInstance() &&
@@ -376,7 +405,8 @@ private:
             createSurface() &&
             pickPhysicalDevice() &&
             createLogicalDevice() &&
-            createSwapChain();
+            createSwapChain() &&
+            createImageViews();
     }
 
     void mainLoop() {
@@ -387,6 +417,10 @@ private:
 
     void cleanup() {
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
+
+        for (auto swap_chain_image_view : swapChainImageViews) {
+            vkDestroyImageView(device, swap_chain_image_view, nullptr);
+        } 
 
         vkDestroySwapchainKHR(device, swapchain, nullptr);
         vkDestroyDevice(device, nullptr);
@@ -475,6 +509,8 @@ private:
     std::vector<VkImage> swapChainImages;
     VkFormat format_;
     VkExtent2D extent_2d_;
+
+    std::vector<VkImageView> swapChainImageViews;
 
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
