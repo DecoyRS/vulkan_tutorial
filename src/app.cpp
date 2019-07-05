@@ -1,5 +1,10 @@
 #include "debug_utils.hpp"
 
+// shaders
+#include <cstdint> // have to include this here to pass 'uint32_t' to shaders
+#include "shader_bin/triangle_vert.hpp"
+#include "shader_bin/fill_triangle_frag.hpp"
+
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
@@ -36,7 +41,8 @@ namespace
         FAILED_TO_CREATE_LOGICAL_DEVICE,
         FAILED_TO_CREATE_WINDOW_SURFACE,
         FAILED_TO_CREATE_SWAP_CHAIN,
-        FAILED_TO_CREATE_IMAGE_VIEWS
+        FAILED_TO_CREATE_IMAGE_VIEWS,
+        FAILED_TO_CREATE_SHADER_MODULE
     };
 
     void quit_application(ERRORS error) {
@@ -398,6 +404,48 @@ private:
         return true;
     }
 
+    VkShaderModule createShaderModule(const uint32_t * shader_code, uint32_t code_size)
+    {
+        VkShaderModuleCreateInfo create_info = {};
+        create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+        create_info.codeSize = code_size;
+        create_info.pCode = shader_code;
+        VkShaderModule shader_module;
+        if(vkCreateShaderModule(device, &create_info, nullptr, &shader_module) != VK_SUCCESS)
+        {
+            quit_application(ERRORS::FAILED_TO_CREATE_SHADER_MODULE);
+        }
+        return shader_module;
+    }
+
+    bool createGraphicsPipeline() {
+        auto vertex_module = createShaderModule(triangle_vert, sizeof(triangle_vert));
+        auto frag_module = createShaderModule(fill_triangle_frag, sizeof(fill_triangle_frag));
+
+        VkPipelineShaderStageCreateInfo vertex_stage_create_info = {};
+        vertex_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vertex_stage_create_info.stage = VK_SHADER_STAGE_VERTEX_BIT;
+        vertex_stage_create_info.module = vertex_module;
+        vertex_stage_create_info.pName = "main";
+        //  pSpecializationInfo is used to pass constants to shaders
+        // vertex_stage_create_info.pSpecializationInfo = nullptr;
+
+        VkPipelineShaderStageCreateInfo frag_stage_create_info = {};
+        frag_stage_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        frag_stage_create_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        frag_stage_create_info.module = frag_module;
+        frag_stage_create_info.pName = "main";
+        //  pSpecializationInfo is used to pass constants to shaders
+        // vertex_stage_create_info.pSpecializationInfo = nullptr;
+        
+        VkPipelineShaderStageCreateInfo shader_stages[] = {vertex_stage_create_info, frag_stage_create_info};
+
+        vkDestroyShaderModule(device, vertex_module, nullptr);
+        vkDestroyShaderModule(device, frag_module, nullptr);
+
+        return true;
+    }
+
     bool initVulkan() {
         return
             createInstance() &&
@@ -406,7 +454,8 @@ private:
             pickPhysicalDevice() &&
             createLogicalDevice() &&
             createSwapChain() &&
-            createImageViews();
+            createImageViews() &&
+            createGraphicsPipeline();
     }
 
     void mainLoop() {

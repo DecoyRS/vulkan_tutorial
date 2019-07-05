@@ -2,3 +2,5 @@ thirdparty/*
 !thirdparty/CMakeLists.txt
 build
 .vscode
+
+src/shader_bin/*
