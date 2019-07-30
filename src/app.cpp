@@ -43,7 +43,8 @@ namespace
         FAILED_TO_CREATE_SWAP_CHAIN,
         FAILED_TO_CREATE_IMAGE_VIEWS,
         FAILED_TO_CREATE_SHADER_MODULE,
-        FAILED_TO_CREATE_PIPELINE_LAYOUT
+        FAILED_TO_CREATE_PIPELINE_LAYOUT,
+        FAILED_TO_CREATE_RENDER_PASS
     };
 
     void quit_application(ERRORS error) {
@@ -533,7 +534,7 @@ private:
         layout_create_info.setLayoutCount = 0; // Optional
         layout_create_info.pSetLayouts = nullptr; // Optional
         layout_create_info.pushConstantRangeCount = 0; // Optional
-        layout_create_info.pushConstantRangeCount = nullptr; // Optional
+        layout_create_info.pPushConstantRanges = nullptr; // Optional
 
         if(vkCreatePipelineLayout(device, &layout_create_info, nullptr, &pipeline_layout_) != VK_SUCCESS) {
             quit_application(ERRORS::FAILED_TO_CREATE_PIPELINE_LAYOUT);
@@ -547,6 +548,41 @@ private:
         return true;
     }
 
+    bool createRenderPass() {
+        VkAttachmentDescription attachment_description = {};
+        attachment_description.format = format_;
+        attachment_description.samples = VK_SAMPLE_COUNT_1_BIT;
+        attachment_description.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        attachment_description.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+        attachment_description.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        attachment_description.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+        VkAttachmentReference attachment_reference = {};
+        attachment_reference.attachment = 0;
+        attachment_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+        VkSubpassDescription subpass_description = {};
+        subpass_description.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass_description.colorAttachmentCount = 1;
+        subpass_description.pColorAttachments = &attachment_reference;
+        // The index of the attachment in this array is directly referenced from the fragment
+        // shader with the layout(location = 0)out vec4 outColor directive!
+        
+        VkRenderPassCreateInfo render_pass_create_info = {};
+        render_pass_create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+        render_pass_create_info.attachmentCount = 1;
+        render_pass_create_info.pAttachments = &attachment_description;
+        render_pass_create_info.subpassCount = 1;
+        render_pass_create_info.pSubpasses = &subpass_description;
+
+        if(vkCreateRenderPass(device, &render_pass_create_info, nullptr, &render_pass_) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_CREATE_RENDER_PASS);
+            return false;
+        }
+
+        return true;
+    }
+
     bool initVulkan() {
         return
             createInstance() &&
@@ -556,6 +592,7 @@ private:
             createLogicalDevice() &&
             createSwapChain() &&
             createImageViews() &&
+            createRenderPass() &&
             createGraphicsPipeline();
     }
 
@@ -569,6 +606,7 @@ private:
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
 
         vkDestroyPipelineLayout(device, pipeline_layout_, nullptr);
+        vkDestroyRenderPass(device, render_pass_, nullptr);
 
         for (auto swap_chain_image_view : swapChainImageViews) {
             vkDestroyImageView(device, swap_chain_image_view, nullptr);
@@ -662,6 +700,7 @@ private:
     VkFormat format_;
     VkExtent2D extent_2d_;
 
+    VkRenderPass render_pass_;
     VkPipelineLayout pipeline_layout_;
 
     std::vector<VkImageView> swapChainImageViews;
