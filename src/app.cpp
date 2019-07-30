@@ -44,7 +44,8 @@ namespace
         FAILED_TO_CREATE_IMAGE_VIEWS,
         FAILED_TO_CREATE_SHADER_MODULE,
         FAILED_TO_CREATE_PIPELINE_LAYOUT,
-        FAILED_TO_CREATE_RENDER_PASS
+        FAILED_TO_CREATE_RENDER_PASS,
+        FAILED_TO_CREATE_GRAPHICS_PIPELINE
     };
 
     void quit_application(ERRORS error) {
@@ -508,16 +509,16 @@ private:
         color_blend_attachment_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO; // Optional
         color_blend_attachment_state.alphaBlendOp = VK_BLEND_OP_ADD; // Optional
 
-        VkPipelineColorBlendStateCreateInfo blend_state_create_info = {};
-        blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        blend_state_create_info.logicOpEnable = VK_FALSE;
-        blend_state_create_info.logicOp = VK_LOGIC_OP_COPY; // Optional
-        blend_state_create_info.attachmentCount = 1;
-        blend_state_create_info.pAttachments = &color_blend_attachment_state;
-        blend_state_create_info.blendConstants[0] = 0.0f; // Optional
-        blend_state_create_info.blendConstants[1] = 0.0f; // Optional
-        blend_state_create_info.blendConstants[2] = 0.0f; // Optional
-        blend_state_create_info.blendConstants[3] = 0.0f; // Optional
+        VkPipelineColorBlendStateCreateInfo color_blend_state_create_info = {};
+        color_blend_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        color_blend_state_create_info.logicOpEnable = VK_FALSE;
+        color_blend_state_create_info.logicOp = VK_LOGIC_OP_COPY; // Optional
+        color_blend_state_create_info.attachmentCount = 1;
+        color_blend_state_create_info.pAttachments = &color_blend_attachment_state;
+        color_blend_state_create_info.blendConstants[0] = 0.0f; // Optional
+        color_blend_state_create_info.blendConstants[1] = 0.0f; // Optional
+        color_blend_state_create_info.blendConstants[2] = 0.0f; // Optional
+        color_blend_state_create_info.blendConstants[3] = 0.0f; // Optional
 
         VkDynamicState dynamic_states[] = {
             VK_DYNAMIC_STATE_VIEWPORT,
@@ -540,7 +541,31 @@ private:
             quit_application(ERRORS::FAILED_TO_CREATE_PIPELINE_LAYOUT);
             return false;
         }
-        
+
+        VkGraphicsPipelineCreateInfo graphics_pipeline_create_info = {};
+        graphics_pipeline_create_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        graphics_pipeline_create_info.stageCount = 2;
+        graphics_pipeline_create_info.pStages = shader_stages;
+        graphics_pipeline_create_info.pVertexInputState = &vertex_input_state_create_info;
+        graphics_pipeline_create_info.pInputAssemblyState = &input_assembly_state_create_info;
+        graphics_pipeline_create_info.pViewportState = &viewport_state_create_info;
+        graphics_pipeline_create_info.pRasterizationState = &rasterization_state_create_info;
+        graphics_pipeline_create_info.pMultisampleState = &multisample_state_create_info;
+        graphics_pipeline_create_info.pDepthStencilState = nullptr; // Optional
+        graphics_pipeline_create_info.pColorBlendState = &color_blend_state_create_info;
+        graphics_pipeline_create_info.pDynamicState = nullptr; // Optional
+
+        graphics_pipeline_create_info.layout = pipeline_layout_;
+        graphics_pipeline_create_info.renderPass = render_pass_;
+        graphics_pipeline_create_info.subpass = 0;
+
+        graphics_pipeline_create_info.basePipelineHandle = VK_NULL_HANDLE; // Optional
+        graphics_pipeline_create_info.basePipelineIndex = -1; // Optional
+
+        if(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &graphics_pipeline_create_info, nullptr, &pipeline_) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_CREATE_GRAPHICS_PIPELINE);
+            return false;
+        }
 
         vkDestroyShaderModule(device, vertex_module, nullptr);
         vkDestroyShaderModule(device, frag_module, nullptr);
@@ -605,6 +630,7 @@ private:
     void cleanup() {
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
 
+        vkDestroyPipeline(device, pipeline_, nullptr);
         vkDestroyPipelineLayout(device, pipeline_layout_, nullptr);
         vkDestroyRenderPass(device, render_pass_, nullptr);
 
@@ -702,6 +728,7 @@ private:
 
     VkRenderPass render_pass_;
     VkPipelineLayout pipeline_layout_;
+    VkPipeline pipeline_;
 
     std::vector<VkImageView> swapChainImageViews;
 
