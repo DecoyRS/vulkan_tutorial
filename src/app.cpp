@@ -45,7 +45,8 @@ namespace
         FAILED_TO_CREATE_SHADER_MODULE,
         FAILED_TO_CREATE_PIPELINE_LAYOUT,
         FAILED_TO_CREATE_RENDER_PASS,
-        FAILED_TO_CREATE_GRAPHICS_PIPELINE
+        FAILED_TO_CREATE_GRAPHICS_PIPELINE,
+        FAILED_TO_CREATE_FRAMEBUFFERS
     };
 
     void quit_application(ERRORS error) {
@@ -380,7 +381,7 @@ private:
     }
 
     bool createImageViews() {
-        swapChainImageViews.resize(swapChainImages.size());
+        swapChainImageViews_.resize(swapChainImages.size());
         for (int i = 0; i < swapChainImages.size(); i++) {
             VkImageViewCreateInfo create_info = {};
             create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -399,7 +400,7 @@ private:
             create_info.subresourceRange.levelCount = 1;
             create_info.subresourceRange.baseArrayLayer = 0;
             create_info.subresourceRange.layerCount = 1;
-            if(vkCreateImageView(device, &create_info, nullptr, &swapChainImageViews[i]) != VK_SUCCESS) {
+            if(vkCreateImageView(device, &create_info, nullptr, &swapChainImageViews_[i]) != VK_SUCCESS) {
                 quit_application(ERRORS::FAILED_TO_CREATE_IMAGE_VIEWS);
                 return false;
             }
@@ -608,6 +609,32 @@ private:
         return true;
     }
 
+    bool createFramebuffers() {
+        swapChainFramebuffers_.resize(swapChainImageViews_.size());
+        for (int i = 0; i <  swapChainImageViews_.size(); i++){
+            VkImageView attachments[] = {swapChainImageViews_[i]};
+            VkFramebufferCreateInfo framebuffer_create_info = {};
+            framebuffer_create_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            // Specify which render pass this framebuffer needs to be compatible with
+            // Compatible = uses same number and type of attachments
+            framebuffer_create_info.renderPass = render_pass_;
+            // attachmentCount & pAttachments specify same objects that should be bound to respective attachment descriptions
+            // in the render pass pAttachment array
+            framebuffer_create_info.attachmentCount = 1;
+            framebuffer_create_info.pAttachments = attachments;
+            framebuffer_create_info.width = extent_2d_.width;
+            framebuffer_create_info.height = extent_2d_.height;
+            framebuffer_create_info.layers = 1;
+
+            if(vkCreateFramebuffer(device, &framebuffer_create_info, nullptr, &swapChainFramebuffers_[i]) != VK_SUCCESS) {
+                quit_application(ERRORS::FAILED_TO_CREATE_FRAMEBUFFERS);
+                return false;
+            }
+
+            return true;
+        }
+    }
+
     bool initVulkan() {
         return
             createInstance() &&
@@ -618,7 +645,8 @@ private:
             createSwapChain() &&
             createImageViews() &&
             createRenderPass() &&
-            createGraphicsPipeline();
+            createGraphicsPipeline() &&
+            createFramebuffers();
     }
 
     void mainLoop() {
@@ -630,11 +658,15 @@ private:
     void cleanup() {
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
 
+        for (auto swap_chain_framebuffer : swapChainFramebuffers_) {
+            vkDestroyFramebuffer(device, swap_chain_framebuffer, nullptr);
+        }
+
         vkDestroyPipeline(device, pipeline_, nullptr);
         vkDestroyPipelineLayout(device, pipeline_layout_, nullptr);
         vkDestroyRenderPass(device, render_pass_, nullptr);
 
-        for (auto swap_chain_image_view : swapChainImageViews) {
+        for (auto swap_chain_image_view : swapChainImageViews_) {
             vkDestroyImageView(device, swap_chain_image_view, nullptr);
         } 
 
@@ -730,7 +762,8 @@ private:
     VkPipelineLayout pipeline_layout_;
     VkPipeline pipeline_;
 
-    std::vector<VkImageView> swapChainImageViews;
+    std::vector<VkImageView> swapChainImageViews_;
+    std::vector<VkFramebuffer> swapChainFramebuffers_;
 
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
