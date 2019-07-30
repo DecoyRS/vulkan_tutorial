@@ -42,7 +42,8 @@ namespace
         FAILED_TO_CREATE_WINDOW_SURFACE,
         FAILED_TO_CREATE_SWAP_CHAIN,
         FAILED_TO_CREATE_IMAGE_VIEWS,
-        FAILED_TO_CREATE_SHADER_MODULE
+        FAILED_TO_CREATE_SHADER_MODULE,
+        FAILED_TO_CREATE_PIPELINE_LAYOUT
     };
 
     void quit_application(ERRORS error) {
@@ -517,6 +518,29 @@ private:
         blend_state_create_info.blendConstants[2] = 0.0f; // Optional
         blend_state_create_info.blendConstants[3] = 0.0f; // Optional
 
+        VkDynamicState dynamic_states[] = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_LINE_WIDTH
+        };
+
+        VkPipelineDynamicStateCreateInfo dynamic_state_create_info = {};
+        dynamic_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamic_state_create_info.dynamicStateCount = 0;
+        dynamic_state_create_info.pDynamicStates = dynamic_states;
+
+        VkPipelineLayoutCreateInfo layout_create_info = {};
+        layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        layout_create_info.setLayoutCount = 0; // Optional
+        layout_create_info.pSetLayouts = nullptr; // Optional
+        layout_create_info.pushConstantRangeCount = 0; // Optional
+        layout_create_info.pushConstantRangeCount = nullptr; // Optional
+
+        if(vkCreatePipelineLayout(device, &layout_create_info, nullptr, &pipeline_layout_) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_CREATE_PIPELINE_LAYOUT);
+            return false;
+        }
+        
+
         vkDestroyShaderModule(device, vertex_module, nullptr);
         vkDestroyShaderModule(device, frag_module, nullptr);
 
@@ -543,6 +567,8 @@ private:
 
     void cleanup() {
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance, callback, nullptr);
+
+        vkDestroyPipelineLayout(device, pipeline_layout_, nullptr);
 
         for (auto swap_chain_image_view : swapChainImageViews) {
             vkDestroyImageView(device, swap_chain_image_view, nullptr);
@@ -635,6 +661,8 @@ private:
     std::vector<VkImage> swapChainImages;
     VkFormat format_;
     VkExtent2D extent_2d_;
+
+    VkPipelineLayout pipeline_layout_;
 
     std::vector<VkImageView> swapChainImageViews;
 
