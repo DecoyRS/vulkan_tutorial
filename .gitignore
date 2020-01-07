@@ -3,4 +3,4 @@ thirdparty/*
 build
 .vscode
 
-src/shader_bin/*
+src/shaders_bin
