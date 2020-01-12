@@ -48,9 +48,10 @@ namespace
         FAILED_TO_CREATE_RENDER_PASS,
         FAILED_TO_CREATE_GRAPHICS_PIPELINE,
         FAILED_TO_CREATE_FRAMEBUFFERS,
+        FAILED_TO_CREATE_COMMAND_POOL,
         // ReSharper disable once CppInconsistentNaming
         // ReSharper disable once CppEnumeratorNeverUsed
-        _END
+        _END,
     };
 
     void quit_application(ERRORS error) {
@@ -639,6 +640,22 @@ private:
         return true;
     }
 
+    bool create_command_pool() {
+        const auto indices = find_queue_families(physical_device_);
+
+        VkCommandPoolCreateInfo command_pool_create_info = {};
+        command_pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+        command_pool_create_info.queueFamilyIndex = indices.graphics_and_present_family;
+        command_pool_create_info.flags = 0; // Optional
+
+        if(vkCreateCommandPool(device_, &command_pool_create_info, nullptr, &command_pool_)) {
+            quit_application(ERRORS::FAILED_TO_CREATE_COMMAND_POOL);
+            return false;
+        }
+        
+        return true;
+    }
+
     bool init_vulkan() {
         return
             create_instance() &&
@@ -650,7 +667,8 @@ private:
             create_image_views() &&
             create_render_pass() &&
             create_graphics_pipeline() &&
-            create_framebuffers();
+            create_framebuffers() &&
+            create_command_pool();
     }
 
     void main_loop() const {
@@ -662,6 +680,8 @@ private:
     void cleanup() {
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance_, callback_, nullptr);
 
+        vkDestroyCommandPool(device_, command_pool_, nullptr);
+        
         for (auto swap_chain_framebuffer : swap_chain_framebuffers_) {
             vkDestroyFramebuffer(device_, swap_chain_framebuffer, nullptr);
         }
@@ -765,6 +785,7 @@ private:
     VkRenderPass render_pass_;
     VkPipelineLayout pipeline_layout_;
     VkPipeline pipeline_;
+    VkCommandPool command_pool_;
 
     std::vector<VkImageView> swap_chain_image_views_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
