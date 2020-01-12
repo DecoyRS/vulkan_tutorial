@@ -673,6 +673,22 @@ private:
             quit_application(ERRORS::FAILED_TO_ALLOCATE_COMMAND_BUFFERS);
             return false;
         }
+
+        for (auto& command_buffer : command_buffers_) {
+            VkCommandBufferBeginInfo begin_info = {};
+            begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+            // The 'flags' parameter specifies how we’re going to use the command buffer. The following values are available:
+            // • VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT: The command buffer will be rerecorded right after executing it once.
+            // • VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT: This is a secondary command buffer that will be entirely within a single render pass.
+            // • VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT: The command buffer can be resubmitted while it is also already pending execution
+            begin_info.flags = 0; // Optional
+            // The pInheritanceInfo parameter is only relevant for secondary command buffers. It specifies which state to inherit from the calling primary command buffers.
+            begin_info.pInheritanceInfo = nullptr; // Optional
+            if(vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
+                quit_application(ERRORS::FAILED_TO_BEGIN_RECORDING_COMMAND_BUFFER);
+                return false;
+            }
+        } 
         
         return true;
     }
