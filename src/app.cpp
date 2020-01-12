@@ -53,6 +53,7 @@ namespace
         END,
         FAILED_TO_ALLOCATE_COMMAND_BUFFERS,
         FAILED_TO_BEGIN_RECORDING_COMMAND_BUFFER,
+        FAILED_TO_END_RECORDING_COMMAND_BUFFER,
     };
 
     void quit_application(ERRORS error) {
@@ -706,7 +707,12 @@ private:
             vkCmdBindPipeline(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
             vkCmdDraw(command_buffers_[i], 3, 1, 0, 0);
             
-            
+            vkCmdEndRenderPass(command_buffers_[i]);
+
+            if(vkEndCommandBuffer(command_buffers_[i]) != VK_SUCCESS) {
+                quit_application(ERRORS::FAILED_TO_END_RECORDING_COMMAND_BUFFER);
+                return false;
+            }
         }
         
         return true;
