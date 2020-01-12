@@ -635,10 +635,8 @@ private:
                 quit_application(ERRORS::FAILED_TO_CREATE_FRAMEBUFFERS);
                 return false;
             }
-
-            return true;
         }
-        return false;
+        return true;
     }
 
     bool init_vulkan() {
