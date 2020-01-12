@@ -35,9 +35,8 @@ namespace
 
     enum class ERRORS : uint32_t
     {
-        // ReSharper disable once CppInconsistentNaming
         // ReSharper disable once CppEnumeratorNeverUsed
-        _START = 0xdead0000,
+        START = 0xdead0000,
         REQUESTED_VALIDATION_LAYERS_ARE_NOT_AVAILABLE,
         FAILED_TO_CREATE_LOGICAL_DEVICE,
         FAILED_TO_CREATE_WINDOW_SURFACE,
@@ -49,9 +48,11 @@ namespace
         FAILED_TO_CREATE_GRAPHICS_PIPELINE,
         FAILED_TO_CREATE_FRAMEBUFFERS,
         FAILED_TO_CREATE_COMMAND_POOL,
-        // ReSharper disable once CppInconsistentNaming
+        FAILED_TO_CREATE_COMMAND_BUFFER,
         // ReSharper disable once CppEnumeratorNeverUsed
-        _END,
+        END,
+        FAILED_TO_ALLOCATE_COMMAND_BUFFERS,
+        FAILED_TO_BEGIN_RECORDING_COMMAND_BUFFER,
     };
 
     void quit_application(ERRORS error) {
@@ -656,6 +657,26 @@ private:
         return true;
     }
 
+    bool create_command_buffers() {
+        command_buffers_.resize(swap_chain_framebuffers_.size());
+
+        VkCommandBufferAllocateInfo command_buffer_allocate_info = {};
+        command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        command_buffer_allocate_info.commandPool = command_pool_;
+        // The 'level' parameter specifies if the allocated command buffers are primary or secondary command buffers.
+        // • VK_COMMAND_BUFFER_LEVEL_PRIMARY: Can be submitted to a queue for execution, but cannot be called from other command buffers.
+        // • VK_COMMAND_BUFFER_LEVEL_SECONDARY: Cannot be submitted directly, but can be called from primary command buffers
+        command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        command_buffer_allocate_info.commandBufferCount = command_buffers_.size();
+
+        if(vkAllocateCommandBuffers(device_, &command_buffer_allocate_info, command_buffers_.data()) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_ALLOCATE_COMMAND_BUFFERS);
+            return false;
+        }
+        
+        return true;
+    }
+
     bool init_vulkan() {
         return
             create_instance() &&
@@ -668,7 +689,8 @@ private:
             create_render_pass() &&
             create_graphics_pipeline() &&
             create_framebuffers() &&
-            create_command_pool();
+            create_command_pool() &&
+            create_command_buffers();
     }
 
     void main_loop() const {
@@ -789,6 +811,7 @@ private:
 
     std::vector<VkImageView> swap_chain_image_views_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
+    std::vector<VkCommandBuffer> command_buffers_;
 
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
