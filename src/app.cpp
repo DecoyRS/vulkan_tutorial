@@ -25,6 +25,8 @@ namespace
     constexpr bool ENABLE_VALIDATION_LAYERS = true;
 #endif
 
+    constexpr int MAX_FRAMES_IN_FLIGHT = 2;
+
     const std::vector<const char*> VALIDATION_LAYERS = {
         "VK_LAYER_LUNARG_standard_validation"
     };
@@ -54,7 +56,7 @@ namespace
         FAILED_TO_ALLOCATE_COMMAND_BUFFERS,
         FAILED_TO_BEGIN_RECORDING_COMMAND_BUFFER,
         FAILED_TO_END_RECORDING_COMMAND_BUFFER,
-        FAILED_TO_CREATE_SEMAPHORES,
+        FAILED_TO_CREATE_SYNC_OBJECTS,
         FAILED_TO_SUBMIT_DRAW_COMMAND_BUFFER,
     };
 
@@ -731,14 +733,26 @@ private:
         return true;
     }
 
-    bool create_semaphores() {
+    bool create_sync_objects() {
+        image_available_semaphores_.resize(MAX_FRAMES_IN_FLIGHT);
+        render_finished_semaphores_.resize(MAX_FRAMES_IN_FLIGHT);
+        fences_.resize(MAX_FRAMES_IN_FLIGHT);
+        images_in_flight_.resize(swap_chain_images_.size(), nullptr);
+        
         VkSemaphoreCreateInfo semaphore_create_info = {};
         semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
-        if( vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &image_available_semaphore_) != VK_SUCCESS ||
-            vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &render_finished_semaphore_) != VK_SUCCESS) {
-            quit_application(ERRORS::FAILED_TO_CREATE_SEMAPHORES);
-            return false;
+        VkFenceCreateInfo fence_create_info = {};
+        fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+        for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++){
+            if( vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &image_available_semaphores_[i]) != VK_SUCCESS ||
+               vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &render_finished_semaphores_[i]) != VK_SUCCESS ||
+               vkCreateFence(device_, &fence_create_info, nullptr, &fences_[i])) {
+                quit_application(ERRORS::FAILED_TO_CREATE_SYNC_OBJECTS);
+                return false;
+            }
         }
         return true;
     }
@@ -757,18 +771,29 @@ private:
             create_framebuffers() &&
             create_command_pool() &&
             create_command_buffers() &&
-            create_semaphores();
+            create_sync_objects();
     }
 
-    void draw_frame() const {
+    void draw_frame() {
+        vkWaitForFences(device_, 1, &fences_[current_frame], VK_TRUE, UINT64_MAX);
+        vkResetFences(device_, 1, &fences_[current_frame]);
+        
         uint32_t image_index;
         // The last parameter specifies a variable to output the index of the swap chain image that has become available. The index refers to the VkImage in our swapChainImages array. We’re going to use that index to pick the right command buffer
-        vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX, image_available_semaphore_, nullptr, &image_index);
+        vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX, image_available_semaphores_[current_frame], nullptr, &image_index);
+
+        // Check if a previous frame is using this image (i.e. there is its fence to wait on)
+        if(images_in_flight_[image_index] != nullptr) {
+            vkWaitForFences(device_, 1, &images_in_flight_[image_index], VK_TRUE, UINT64_MAX);
+        }
+
+        // Mark the image as now being in use by this frame
+        images_in_flight_[image_index] = fences_[current_frame];
 
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
-        VkSemaphore wait_semaphores[] = {image_available_semaphore_};
+        VkSemaphore wait_semaphores[] = {image_available_semaphores_[current_frame]};
         VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         submit_info.waitSemaphoreCount = 1;
         submit_info.pWaitSemaphores = wait_semaphores;
@@ -776,28 +801,46 @@ private:
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &command_buffers_[image_index];
 
-        VkSemaphore signal_semaphores[] = {render_finished_semaphore_};
+        VkSemaphore signal_semaphores[] = {render_finished_semaphores_[current_frame]};
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = signal_semaphores;
 
-        if(vkQueueSubmit(graphics_queue_, 1, &submit_info, nullptr) != VK_SUCCESS) {
+        if(vkQueueSubmit(graphics_queue_, 1, &submit_info, fences_[current_frame]) != VK_SUCCESS) {
             quit_application(ERRORS::FAILED_TO_SUBMIT_DRAW_COMMAND_BUFFER);
         }
-        
+
+        VkPresentInfoKHR present_info = {};
+        present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+        present_info.waitSemaphoreCount = 1;
+        present_info.pWaitSemaphores = wait_semaphores;
+
+        VkSwapchainKHR swapchains[] = {swapchain_};
+        present_info.swapchainCount = 1;
+        present_info.pSwapchains = swapchains;
+        present_info.pImageIndices = &image_index;
+        present_info.pResults = nullptr; // Optional
+        vkQueuePresentKHR(graphics_queue_, &present_info);
+
+        current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
 
-    void main_loop() const {
+    void main_loop() {
         while (!glfwWindowShouldClose(window_)) {
             glfwPollEvents();
             draw_frame();
         }
+        vkDeviceWaitIdle(device_);
     }
 
     void cleanup() {
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance_, callback_, nullptr);
 
-        vkDestroySemaphore(device_, image_available_semaphore_, nullptr);
-        vkDestroySemaphore(device_, render_finished_semaphore_, nullptr);
+        for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            vkDestroySemaphore(device_, image_available_semaphores_[i], nullptr);
+            vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
+            vkDestroyFence(device_, fences_[i], nullptr);
+        }
+            
         
         vkDestroyCommandPool(device_, command_pool_, nullptr);
         
@@ -910,9 +953,12 @@ private:
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     std::vector<VkCommandBuffer> command_buffers_;
 
-    VkSemaphore image_available_semaphore_;
-    VkSemaphore render_finished_semaphore_;
+    std::vector<VkSemaphore> image_available_semaphores_;
+    std::vector<VkSemaphore> render_finished_semaphores_;
+    std::vector<VkFence> fences_;
+    std::vector<VkFence> images_in_flight_;
 
+    size_t current_frame = 0;
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
 };
