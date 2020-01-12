@@ -55,6 +55,7 @@ namespace
         FAILED_TO_BEGIN_RECORDING_COMMAND_BUFFER,
         FAILED_TO_END_RECORDING_COMMAND_BUFFER,
         FAILED_TO_CREATE_SEMAPHORES,
+        FAILED_TO_SUBMIT_DRAW_COMMAND_BUFFER,
     };
 
     void quit_application(ERRORS error) {
@@ -749,6 +750,28 @@ private:
     }
 
     void draw_frame() const {
+        uint32_t image_index;
+        // The last parameter specifies a variable to output the index of the swap chain image that has become available. The index refers to the VkImage in our swapChainImages array. We’re going to use that index to pick the right command buffer
+        vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX, image_available_semaphore_, nullptr, &image_index);
+
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+
+        VkSemaphore wait_semaphores[] = {image_available_semaphore_};
+        VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
+        submit_info.waitSemaphoreCount = 1;
+        submit_info.pWaitSemaphores = wait_semaphores;
+        submit_info.pWaitDstStageMask = wait_stages;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffers_[image_index];
+
+        VkSemaphore signal_semaphores[] = {render_finished_semaphore_};
+        submit_info.signalSemaphoreCount = 1;
+        submit_info.pSignalSemaphores = signal_semaphores;
+
+        if(vkQueueSubmit(graphics_queue_, 1, &submit_info, nullptr) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_SUBMIT_DRAW_COMMAND_BUFFER);
+        }
         
     }
 
