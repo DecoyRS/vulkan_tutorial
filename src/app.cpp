@@ -153,7 +153,7 @@ private:
 
         auto instance_extensions = get_required_extensions();
 
-        create_info.enabledExtensionCount = instance_extensions.size();
+        create_info.enabledExtensionCount = uint32_t(instance_extensions.size());
         create_info.ppEnabledExtensionNames = instance_extensions.data();
 
         if constexpr (ENABLE_VALIDATION_LAYERS) {
@@ -667,7 +667,7 @@ private:
         // • VK_COMMAND_BUFFER_LEVEL_PRIMARY: Can be submitted to a queue for execution, but cannot be called from other command buffers.
         // • VK_COMMAND_BUFFER_LEVEL_SECONDARY: Cannot be submitted directly, but can be called from primary command buffers
         command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        command_buffer_allocate_info.commandBufferCount = command_buffers_.size();
+        command_buffer_allocate_info.commandBufferCount = uint32_t(command_buffers_.size());
 
         if(vkAllocateCommandBuffers(device_, &command_buffer_allocate_info, command_buffers_.data()) != VK_SUCCESS) {
             quit_application(ERRORS::FAILED_TO_ALLOCATE_COMMAND_BUFFERS);
@@ -703,6 +703,9 @@ private:
             // • VK_SUBPASS_CONTENTS_INLINE: The render pass commands will be embedded in the primary command buffer itself and no secondary command buffers will be executed.
             // • VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: The render pass commands will be executed from secondary command buffers.
             vkCmdBeginRenderPass(command_buffers_[i], &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+            vkCmdBindPipeline(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
+            vkCmdDraw(command_buffers_[i], 3, 1, 0, 0);
+            
             
         }
         
