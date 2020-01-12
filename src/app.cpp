@@ -54,6 +54,7 @@ namespace
         FAILED_TO_ALLOCATE_COMMAND_BUFFERS,
         FAILED_TO_BEGIN_RECORDING_COMMAND_BUFFER,
         FAILED_TO_END_RECORDING_COMMAND_BUFFER,
+        FAILED_TO_CREATE_SEMAPHORES,
     };
 
     void quit_application(ERRORS error) {
@@ -718,6 +719,18 @@ private:
         return true;
     }
 
+    bool create_semaphores() {
+        VkSemaphoreCreateInfo semaphore_create_info = {};
+        semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+        if( vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &image_available_semaphore_) != VK_SUCCESS ||
+            vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &render_finished_semaphore_) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_CREATE_SEMAPHORES);
+            return false;
+        }
+        return true;
+    }
+
     bool init_vulkan() {
         return
             create_instance() &&
@@ -731,18 +744,27 @@ private:
             create_graphics_pipeline() &&
             create_framebuffers() &&
             create_command_pool() &&
-            create_command_buffers();
+            create_command_buffers() &&
+            create_semaphores();
+    }
+
+    void draw_frame() const {
+        
     }
 
     void main_loop() const {
         while (!glfwWindowShouldClose(window_)) {
             glfwPollEvents();
+            draw_frame();
         }
     }
 
     void cleanup() {
         if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance_, callback_, nullptr);
 
+        vkDestroySemaphore(device_, image_available_semaphore_, nullptr);
+        vkDestroySemaphore(device_, render_finished_semaphore_, nullptr);
+        
         vkDestroyCommandPool(device_, command_pool_, nullptr);
         
         for (auto swap_chain_framebuffer : swap_chain_framebuffers_) {
@@ -853,6 +875,9 @@ private:
     std::vector<VkImageView> swap_chain_image_views_;
     std::vector<VkFramebuffer> swap_chain_framebuffers_;
     std::vector<VkCommandBuffer> command_buffers_;
+
+    VkSemaphore image_available_semaphore_;
+    VkSemaphore render_finished_semaphore_;
 
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
