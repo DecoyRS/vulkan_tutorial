@@ -309,7 +309,7 @@ private:
             swap_chain_images_.resize(image_count);
             vkGetSwapchainImagesKHR(device_, swapchain_, &image_count, swap_chain_images_.data());
             format_ = format_khr.format;
-            extent_2d_ = extent_2d;
+            swap_chain_extent_ = extent_2d;
             return true;
         }
 
@@ -466,14 +466,14 @@ private:
         VkViewport viewport = {};
         viewport.x = 0.f;
         viewport.y = 0.f;
-        viewport.width = static_cast<float>(extent_2d_.width);
-        viewport.height = static_cast<float>(extent_2d_.height);
+        viewport.width = static_cast<float>(swap_chain_extent_.width);
+        viewport.height = static_cast<float>(swap_chain_extent_.height);
         viewport.minDepth = 0.f;
         viewport.maxDepth = 1.f;
 
         VkRect2D scissor = {};
         scissor.offset = {0, 0};
-        scissor.extent = extent_2d_;
+        scissor.extent = swap_chain_extent_;
 
         VkPipelineViewportStateCreateInfo viewport_state_create_info = {};
         viewport_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
@@ -629,8 +629,8 @@ private:
             // in the render pass pAttachment array
             framebuffer_create_info.attachmentCount = 1;
             framebuffer_create_info.pAttachments = attachments;
-            framebuffer_create_info.width = extent_2d_.width;
-            framebuffer_create_info.height = extent_2d_.height;
+            framebuffer_create_info.width = swap_chain_extent_.width;
+            framebuffer_create_info.height = swap_chain_extent_.height;
             framebuffer_create_info.layers = 1;
 
             if(vkCreateFramebuffer(device_, &framebuffer_create_info, nullptr, &swap_chain_framebuffers_[i]) != VK_SUCCESS) {
@@ -674,7 +674,7 @@ private:
             return false;
         }
 
-        for (auto& command_buffer : command_buffers_) {
+        for (int i = 0; i < command_buffers_.size(); i++) {
             VkCommandBufferBeginInfo begin_info = {};
             begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
             // The 'flags' parameter specifies how we’re going to use the command buffer. The following values are available:
@@ -684,11 +684,27 @@ private:
             begin_info.flags = 0; // Optional
             // The pInheritanceInfo parameter is only relevant for secondary command buffers. It specifies which state to inherit from the calling primary command buffers.
             begin_info.pInheritanceInfo = nullptr; // Optional
-            if(vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
+            if(vkBeginCommandBuffer(command_buffers_[i], &begin_info) != VK_SUCCESS) {
                 quit_application(ERRORS::FAILED_TO_BEGIN_RECORDING_COMMAND_BUFFER);
                 return false;
             }
-        } 
+
+            VkRenderPassBeginInfo render_pass_begin_info = {};
+            render_pass_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+            render_pass_begin_info.renderPass = render_pass_;
+            render_pass_begin_info.framebuffer = swap_chain_framebuffers_[i];
+            render_pass_begin_info.renderArea.offset = {0, 0};
+            render_pass_begin_info.renderArea.extent = swap_chain_extent_;
+            // Black with 100% opacity
+            VkClearValue clear_color = {0.0f, 0.0f, 0.0f, 1.0f};
+            render_pass_begin_info.clearValueCount = 1;
+            render_pass_begin_info.pClearValues = &clear_color;
+
+            // • VK_SUBPASS_CONTENTS_INLINE: The render pass commands will be embedded in the primary command buffer itself and no secondary command buffers will be executed.
+            // • VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: The render pass commands will be executed from secondary command buffers.
+            vkCmdBeginRenderPass(command_buffers_[i], &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+            
+        }
         
         return true;
     }
@@ -818,7 +834,7 @@ private:
 
     std::vector<VkImage> swap_chain_images_;
     VkFormat format_;
-    VkExtent2D extent_2d_;
+    VkExtent2D swap_chain_extent_;
 
     VkRenderPass render_pass_;
     VkPipelineLayout pipeline_layout_;
