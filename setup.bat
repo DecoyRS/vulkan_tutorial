@@ -22,6 +22,6 @@ popd
 REM Setup build
 mkdir build
 pushd build
-cmake -G "Visual Studio 15 2017 Win64" ..
+cmake -G "Visual Studio 16 2019" ..
 popd
 @echo on
