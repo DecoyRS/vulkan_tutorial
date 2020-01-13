@@ -111,9 +111,13 @@ private:
     void init_window() {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
         window_ = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-
+        glfwSetWindowUserPointer(window_, this);
+        glfwSetFramebufferSizeCallback(window_, [](GLFWwindow* window, int width, int height) {
+            const auto app = reinterpret_cast<HelloTriangleApplication*>(glfwGetWindowUserPointer(window));
+            app->framebuffer_resized = true;
+        });
     }
 
     bool check_validation_layer_support() {
@@ -851,7 +855,8 @@ private:
         present_info.pImageIndices = &image_index;
         present_info.pResults = nullptr; // Optional
         result = vkQueuePresentKHR(graphics_queue_, &present_info);
-        if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+        if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || framebuffer_resized) {
+            framebuffer_resized = false;
             recreate_swap_chain();
         } else if (result != VK_SUCCESS) {
             quit_application(ERRORS::FAILED_TO_PRESENT_SWAP_CHAIN);
@@ -902,7 +907,7 @@ private:
         
         vkDestroyDevice(device_, nullptr);
 
-                if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance_, callback_, nullptr);
+        if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance_, callback_, nullptr);
 
         vkDestroySurfaceKHR(instance_, surface_, nullptr);
         vkDestroyInstance(instance_, nullptr);
@@ -1004,6 +1009,9 @@ private:
     std::vector<VkFence> images_in_flight_;
 
     size_t current_frame = 0;
+
+    bool framebuffer_resized = false;
+    
     constexpr static int WIDTH = 800;
     constexpr static int HEIGHT = 600;
 };
