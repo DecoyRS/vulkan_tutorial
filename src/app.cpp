@@ -55,6 +55,7 @@ namespace
         FAILED_TO_END_RECORDING_COMMAND_BUFFER,
         FAILED_TO_CREATE_SYNC_OBJECTS,
         FAILED_TO_SUBMIT_DRAW_COMMAND_BUFFER,
+        FAILED_TO_ACQUIRE_NEXT_IMAGE,
         // ReSharper disable once CppEnumeratorNeverUsed
         END,
     };
@@ -265,7 +266,10 @@ private:
         if(capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max() && capabilities.currentExtent.height != std::numeric_limits<uint32_t>::max())
             return capabilities.currentExtent;
 
-        VkExtent2D extent = {WIDTH, HEIGHT};
+        int width;
+        int height;
+        glfwGetFramebufferSize(window_, &width, &height);
+        VkExtent2D extent = {static_cast<uint32_t>(width), static_cast<uint32_t>(height)};
 
         extent.width = std::clamp(extent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
         extent.height = std::clamp(extent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
@@ -319,6 +323,20 @@ private:
 
         quit_application(ERRORS::FAILED_TO_CREATE_SWAP_CHAIN);
         return false;
+    }
+
+    bool recreate_swap_chain() {
+        vkDeviceWaitIdle(device_);
+
+        cleanup_swap_chain();
+
+        return
+            create_swap_chain() &&
+            create_image_views() &&
+            create_render_pass() &&
+            create_graphics_pipeline() &&
+            create_framebuffers() &&
+            create_command_buffers();
     }
 
     bool pick_physical_device() {
@@ -746,9 +764,10 @@ private:
         fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
 
         for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++){
-            if( vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &image_available_semaphores_[i]) != VK_SUCCESS ||
+            if(vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &image_available_semaphores_[i]) != VK_SUCCESS ||
                vkCreateSemaphore(device_, &semaphore_create_info, nullptr, &render_finished_semaphores_[i]) != VK_SUCCESS ||
-               vkCreateFence(device_, &fence_create_info, nullptr, &fences_[i])) {
+               vkCreateFence(device_, &fence_create_info, nullptr, &fences_[i])
+               ) {
                 quit_application(ERRORS::FAILED_TO_CREATE_SYNC_OBJECTS);
                 return false;
             }
@@ -774,16 +793,24 @@ private:
     }
 
     void draw_frame() {
-        vkWaitForFences(device_, 1, &fences_[current_frame], VK_TRUE, UINT64_MAX);
-        vkResetFences(device_, 1, &fences_[current_frame]);
+        vkWaitForFences(device_, 1, &fences_[current_frame], VK_TRUE, std::numeric_limits<uint64_t>::max());        
         
         uint32_t image_index;
         // The last parameter specifies a variable to output the index of the swap chain image that has become available. The index refers to the VkImage in our swapChainImages array. We’re going to use that index to pick the right command buffer
-        vkAcquireNextImageKHR(device_, swapchain_, UINT64_MAX, image_available_semaphores_[current_frame], nullptr, &image_index);
+        VkResult result = vkAcquireNextImageKHR(device_, swapchain_, std::numeric_limits<uint64_t>::max(), image_available_semaphores_[current_frame], nullptr, &image_index);
+        if(result == VK_ERROR_OUT_OF_DATE_KHR)
+        {
+            recreate_swap_chain();
+            return;
+        } else if(result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        {
+            quit_application(ERRORS::FAILED_TO_ACQUIRE_NEXT_IMAGE);
+            return;
+        }
 
         // Check if a previous frame is using this image (i.e. there is its fence to wait on)
         if(images_in_flight_[image_index] != nullptr) {
-            vkWaitForFences(device_, 1, &images_in_flight_[image_index], VK_TRUE, UINT64_MAX);
+            vkWaitForFences(device_, 1, &images_in_flight_[image_index], VK_TRUE, std::numeric_limits<uint64_t>::max());
         }
 
         // Mark the image as now being in use by this frame
@@ -793,9 +820,10 @@ private:
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
 
         VkSemaphore wait_semaphores[] = {image_available_semaphores_[current_frame]};
-        VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         submit_info.waitSemaphoreCount = 1;
         submit_info.pWaitSemaphores = wait_semaphores;
+        
+        VkPipelineStageFlags wait_stages[] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
         submit_info.pWaitDstStageMask = wait_stages;
         submit_info.commandBufferCount = 1;
         submit_info.pCommandBuffers = &command_buffers_[image_index];
@@ -804,6 +832,8 @@ private:
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = signal_semaphores;
 
+        vkResetFences(device_, 1, &fences_[current_frame]);
+        
         if(vkQueueSubmit(graphics_queue_, 1, &submit_info, fences_[current_frame]) != VK_SUCCESS) {
             quit_application(ERRORS::FAILED_TO_SUBMIT_DRAW_COMMAND_BUFFER);
         }
@@ -811,11 +841,12 @@ private:
         VkPresentInfoKHR present_info = {};
         present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
         present_info.waitSemaphoreCount = 1;
-        present_info.pWaitSemaphores = wait_semaphores;
+        present_info.pWaitSemaphores = signal_semaphores;
 
         VkSwapchainKHR swapchains[] = {swapchain_};
         present_info.swapchainCount = 1;
         present_info.pSwapchains = swapchains;
+        
         present_info.pImageIndices = &image_index;
         present_info.pResults = nullptr; // Optional
         vkQueuePresentKHR(graphics_queue_, &present_info);
@@ -831,21 +862,14 @@ private:
         vkDeviceWaitIdle(device_);
     }
 
-    void cleanup() {
-        if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance_, callback_, nullptr);
 
-        for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-            vkDestroySemaphore(device_, image_available_semaphores_[i], nullptr);
-            vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
-            vkDestroyFence(device_, fences_[i], nullptr);
-        }
-            
-        
-        vkDestroyCommandPool(device_, command_pool_, nullptr);
-        
+    void cleanup_swap_chain()
+    {
         for (auto swap_chain_framebuffer : swap_chain_framebuffers_) {
             vkDestroyFramebuffer(device_, swap_chain_framebuffer, nullptr);
         }
+
+        vkFreeCommandBuffers(device_, command_pool_, static_cast<uint32_t>(command_buffers_.size()), command_buffers_.data());
 
         vkDestroyPipeline(device_, pipeline_, nullptr);
         vkDestroyPipelineLayout(device_, pipeline_layout_, nullptr);
@@ -853,10 +877,25 @@ private:
 
         for (auto swap_chain_image_view : swap_chain_image_views_) {
             vkDestroyImageView(device_, swap_chain_image_view, nullptr);
-        } 
-
+        }
+        
         vkDestroySwapchainKHR(device_, swapchain_, nullptr);
+    }
+
+    void cleanup() {        
+        cleanup_swap_chain(); 
+
+        for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+            vkDestroySemaphore(device_, image_available_semaphores_[i], nullptr);
+            vkDestroySemaphore(device_, render_finished_semaphores_[i], nullptr);
+            vkDestroyFence(device_, fences_[i], nullptr);
+        }
+                    
+        vkDestroyCommandPool(device_, command_pool_, nullptr);
+        
         vkDestroyDevice(device_, nullptr);
+
+                if constexpr (ENABLE_VALIDATION_LAYERS) DestroyDebugUtilsMessengerEXT(instance_, callback_, nullptr);
 
         vkDestroySurfaceKHR(instance_, surface_, nullptr);
         vkDestroyInstance(instance_, nullptr);
