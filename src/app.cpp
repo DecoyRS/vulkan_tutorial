@@ -50,14 +50,13 @@ namespace
         FAILED_TO_CREATE_GRAPHICS_PIPELINE,
         FAILED_TO_CREATE_FRAMEBUFFERS,
         FAILED_TO_CREATE_COMMAND_POOL,
-        FAILED_TO_CREATE_COMMAND_BUFFER,
-        // ReSharper disable once CppEnumeratorNeverUsed
-        END,
         FAILED_TO_ALLOCATE_COMMAND_BUFFERS,
         FAILED_TO_BEGIN_RECORDING_COMMAND_BUFFER,
         FAILED_TO_END_RECORDING_COMMAND_BUFFER,
         FAILED_TO_CREATE_SYNC_OBJECTS,
         FAILED_TO_SUBMIT_DRAW_COMMAND_BUFFER,
+        // ReSharper disable once CppEnumeratorNeverUsed
+        END,
     };
 
     void quit_application(ERRORS error) {
@@ -116,23 +115,23 @@ private:
     }
 
     bool check_validation_layer_support() {
-        uint32_t layerCount;
-        vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
+        uint32_t layer_count;
+        vkEnumerateInstanceLayerProperties(&layer_count, nullptr);
 
-        std::vector<VkLayerProperties> availableLayers(layerCount);
-        vkEnumerateInstanceLayerProperties(&layerCount, availableLayers.data());
+        std::vector<VkLayerProperties> available_layers(layer_count);
+        vkEnumerateInstanceLayerProperties(&layer_count, available_layers.data());
 
-        for (const auto layerName : VALIDATION_LAYERS) {
-            bool layerFound = false;
+        for (const auto layer_name : VALIDATION_LAYERS) {
+            bool layer_found = false;
 
-            for (const auto& layerProperties : availableLayers) {
-                if (strcmp(layerName, layerProperties.layerName)) {
-                    layerFound = true;
+            for (const auto& layer_properties : available_layers) {
+                if (strcmp(layer_name, layer_properties.layerName)) {
+                    layer_found = true;
                     break;
                 }
             }
 
-            if (!layerFound) return false;
+            if (!layer_found) return false;
         }
 
         return true;
