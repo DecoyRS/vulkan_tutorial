@@ -110,23 +110,23 @@ namespace
 
             return binding_description;
         }
+
+        static std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions() {
+            std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = {};
+
+            attribute_descriptions[0].binding = 0;
+            attribute_descriptions[0].location = 0;
+            attribute_descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+            attribute_descriptions[0].offset = offsetof(Vertex, position);
+
+            attribute_descriptions[1].binding = 0;
+            attribute_descriptions[1].location = 1;
+            attribute_descriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+            attribute_descriptions[1].offset = offsetof(Vertex, color);
+
+            return attribute_descriptions;
+        }
     };
-
-    static std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions() {
-        std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = {};
-
-        attribute_descriptions[0].binding = 0;
-        attribute_descriptions[0].location = 0;
-        attribute_descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-        attribute_descriptions[0].offset = offsetof(Vertex, position);
-
-        attribute_descriptions[1].binding = 0;
-        attribute_descriptions[1].location = 1;
-        attribute_descriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attribute_descriptions[1].offset = offsetof(Vertex, color);
-
-        return attribute_descriptions;
-    }
 
     const std::vector<Vertex> vertices = {
         {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
@@ -523,12 +523,15 @@ private:
         
         VkPipelineShaderStageCreateInfo shader_stages[] = {vertex_stage_create_info, frag_stage_create_info};
 
+        auto binding_description = Vertex::get_binding_description();
+        auto attribute_description = Vertex::get_attribute_descriptions();        
+
         VkPipelineVertexInputStateCreateInfo vertex_input_state_create_info = {};
         vertex_input_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertex_input_state_create_info.vertexBindingDescriptionCount = 0;
-        vertex_input_state_create_info.pVertexBindingDescriptions = nullptr;
-        vertex_input_state_create_info.vertexAttributeDescriptionCount = 0;
-        vertex_input_state_create_info.pVertexAttributeDescriptions = nullptr;
+        vertex_input_state_create_info.vertexBindingDescriptionCount = 1;
+        vertex_input_state_create_info.pVertexBindingDescriptions = &binding_description;
+        vertex_input_state_create_info.vertexAttributeDescriptionCount = static_cast<uint32_t>(attribute_description.size());
+        vertex_input_state_create_info.pVertexAttributeDescriptions = attribute_description.data();
 
         VkPipelineInputAssemblyStateCreateInfo input_assembly_state_create_info = {};
         input_assembly_state_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
