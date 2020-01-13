@@ -16,6 +16,7 @@
 #include <iostream>
 #include <unordered_set>
 #include <algorithm>
+#include <array>
 
 namespace
 {
@@ -94,6 +95,44 @@ namespace
             instance, "vkDestroyDebugUtilsMessengerEXT"));
         if (func != nullptr) func(instance, callback, pAllocator);
     }
+
+    struct Vertex
+    {
+        glm::vec2 position;
+        glm::vec3 color;
+
+        static VkVertexInputBindingDescription get_binding_description() {
+            VkVertexInputBindingDescription binding_description = {};
+
+            binding_description.binding = 0;
+            binding_description.stride = sizeof(Vertex);
+            binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+            return binding_description;
+        }
+    };
+
+    static std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions() {
+        std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = {};
+
+        attribute_descriptions[0].binding = 0;
+        attribute_descriptions[0].location = 0;
+        attribute_descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attribute_descriptions[0].offset = offsetof(Vertex, position);
+
+        attribute_descriptions[1].binding = 0;
+        attribute_descriptions[1].location = 1;
+        attribute_descriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
+        attribute_descriptions[1].offset = offsetof(Vertex, color);
+
+        return attribute_descriptions;
+    }
+
+    const std::vector<Vertex> vertices = {
+        {{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+        {{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+        {{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+    };
 }
 
 class HelloTriangleApplication
@@ -111,7 +150,7 @@ private:
     void init_window() {
         glfwInit();
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-        // glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
+        
         window_ = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
         glfwSetWindowUserPointer(window_, this);
         glfwSetFramebufferSizeCallback(window_, [](GLFWwindow* window, int width, int height) {
@@ -331,6 +370,12 @@ private:
     }
 
     bool recreate_swap_chain() {
+        int width = 0;
+        int height = 0;
+        while(width == 0 || height == 0) {
+            glfwGetFramebufferSize(window_, &width, &height);
+            glfwWaitEvents();
+        }
         vkDeviceWaitIdle(device_);
 
         cleanup_swap_chain();

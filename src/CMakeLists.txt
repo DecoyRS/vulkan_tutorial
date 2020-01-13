@@ -38,7 +38,7 @@ if(glslang_validator_path)
     )
 endif()
 
-add_executable(vulkan_tutorial ${SOURCE} ${shader_bin_files})
+add_executable(vulkan_tutorial ${SOURCE} ${shader_bin_files} ${shader_files})
 set_target_properties(vulkan_tutorial PROPERTIES FOLDER "Apps")
 target_link_libraries(vulkan_tutorial Vulkan::Vulkan glfw glm)
 target_include_directories(vulkan_tutorial PRIVATE ${CMAKE_CURRENT_LIST_DIR})
