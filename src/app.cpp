@@ -58,6 +58,7 @@ namespace
         FAILED_TO_ACQUIRE_NEXT_IMAGE,
         // ReSharper disable once CppEnumeratorNeverUsed
         END,
+        FAILED_TO_PRESENT_SWAP_CHAIN,
     };
 
     void quit_application(ERRORS error) {
@@ -849,7 +850,13 @@ private:
         
         present_info.pImageIndices = &image_index;
         present_info.pResults = nullptr; // Optional
-        vkQueuePresentKHR(graphics_queue_, &present_info);
+        result = vkQueuePresentKHR(graphics_queue_, &present_info);
+        if(result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR) {
+            recreate_swap_chain();
+        } else if (result != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_PRESENT_SWAP_CHAIN);
+            return;
+        }
 
         current_frame = (current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
     }
