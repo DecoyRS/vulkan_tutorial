@@ -60,6 +60,7 @@ namespace
         // ReSharper disable once CppEnumeratorNeverUsed
         END,
         FAILED_TO_PRESENT_SWAP_CHAIN,
+        FAILED_TO_CREATE_VERTEX_BUFFER,
     };
 
     void quit_application(ERRORS error) {
@@ -828,6 +829,19 @@ private:
         return true;
     }
 
+    bool create_vertex_buffer() {
+        VkBufferCreateInfo buffer_create_info = {};
+        buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        buffer_create_info.size = sizeof(vertices[0]) * vertices.size();
+        buffer_create_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        if(vkCreateBuffer(device_, &buffer_create_info, nullptr, &vertex_buffer_) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_CREATE_VERTEX_BUFFER);
+            return false;
+        }
+        return true;
+    }
+
     bool init_vulkan() {
         return
             create_instance() &&
@@ -841,6 +855,7 @@ private:
             create_graphics_pipeline() &&
             create_framebuffers() &&
             create_command_pool() &&
+            create_vertex_buffer() &&
             create_command_buffers() &&
             create_sync_objects();
     }
@@ -943,7 +958,9 @@ private:
     }
 
     void cleanup() {        
-        cleanup_swap_chain(); 
+        cleanup_swap_chain();
+
+        vkDestroyBuffer(device_, vertex_buffer_, nullptr);
 
         for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(device_, image_available_semaphores_[i], nullptr);
@@ -1055,6 +1072,7 @@ private:
     std::vector<VkSemaphore> render_finished_semaphores_;
     std::vector<VkFence> fences_;
     std::vector<VkFence> images_in_flight_;
+    VkBuffer vertex_buffer_;
 
     size_t current_frame = 0;
 
