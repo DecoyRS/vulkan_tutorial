@@ -61,6 +61,8 @@ namespace
         END,
         FAILED_TO_PRESENT_SWAP_CHAIN,
         FAILED_TO_CREATE_VERTEX_BUFFER,
+        FAILED_TO_FIND_SUITABLE_MEMORY_TYPE,
+        FAILED_TO_ALLOCATE_VERTEX_BUFFER_MEMORY,
     };
 
     void quit_application(ERRORS error) {
@@ -839,7 +841,38 @@ private:
             quit_application(ERRORS::FAILED_TO_CREATE_VERTEX_BUFFER);
             return false;
         }
+
+        VkMemoryRequirements memory_requirements;
+        vkGetBufferMemoryRequirements(device_, vertex_buffer_, &memory_requirements);
+
+        VkMemoryAllocateInfo memory_allocate_info = {};
+        memory_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        memory_allocate_info.allocationSize = memory_requirements.size;
+        memory_allocate_info.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+        if(vkAllocateMemory(device_, &memory_allocate_info, nullptr, &vertex_device_memory_) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_ALLOCATE_VERTEX_BUFFER_MEMORY);
+            return false;
+        }
+
+        vkBindBufferMemory(device_, vertex_buffer_, vertex_device_memory_, 0);
         return true;
+    }
+
+    uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags property_flags) {
+        VkPhysicalDeviceMemoryProperties physical_device_memory_properties;
+        vkGetPhysicalDeviceMemoryProperties(physical_device_, &physical_device_memory_properties);
+
+        for(uint32_t i = 0; i < physical_device_memory_properties.memoryTypeCount; i++) {
+            if( type_filter & (1 << i) &&
+                (physical_device_memory_properties.memoryTypes[i].propertyFlags & property_flags) == property_flags
+                ) {
+                return i;
+            }
+        }
+        quit_application(ERRORS::FAILED_TO_FIND_SUITABLE_MEMORY_TYPE);
+        return 0;
     }
 
     bool init_vulkan() {
@@ -961,6 +994,7 @@ private:
         cleanup_swap_chain();
 
         vkDestroyBuffer(device_, vertex_buffer_, nullptr);
+        vkFreeMemory(device_, vertex_device_memory_, nullptr);
 
         for(int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
             vkDestroySemaphore(device_, image_available_semaphores_[i], nullptr);
@@ -1073,6 +1107,7 @@ private:
     std::vector<VkFence> fences_;
     std::vector<VkFence> images_in_flight_;
     VkBuffer vertex_buffer_;
+    VkDeviceMemory vertex_device_memory_;
 
     size_t current_frame = 0;
 
