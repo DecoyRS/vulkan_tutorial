@@ -863,22 +863,66 @@ private:
         }
 
         vkBindBufferMemory(device_, buffer, device_memory, 0);
-
         return true;
     }
 
     bool create_vertex_buffer() {
-        const size_t buffer_size = sizeof(vertices[0]) * vertices.size();
+        const VkDeviceSize buffer_size = sizeof(vertices[0]) * vertices.size();
 
-        bool result = create_buffer(buffer_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-            vertex_buffer_, vertex_device_memory_);
+        VkBuffer staging_buffer;
+        VkDeviceMemory staging_device_memory;
+        if(!create_buffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, staging_buffer, staging_device_memory))
+                return false;
         
         void* data;
-        vkMapMemory(device_, vertex_device_memory_, 0, buffer_size, 0, &data);
+        vkMapMemory(device_, staging_device_memory, 0, buffer_size, 0, &data);
         memcpy(data, vertices.data(), buffer_size);
-        vkUnmapMemory(device_, vertex_device_memory_);
+        vkUnmapMemory(device_, staging_device_memory);
+        
+        if(!create_buffer(buffer_size, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertex_buffer_, vertex_device_memory_))
+                return false;
+
+        copy_buffer(staging_buffer, vertex_buffer_, buffer_size);
+        vkDestroyBuffer(device_, staging_buffer, nullptr);
+        vkFreeMemory(device_, staging_device_memory, nullptr);
         return true;
+    }
+
+    void copy_buffer(VkBuffer src_buffer, VkBuffer dst_buffer, VkDeviceSize size) {
+        VkCommandBufferAllocateInfo command_buffer_allocate_info = {};
+    	command_buffer_allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        command_buffer_allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        command_buffer_allocate_info.commandPool = command_pool_;
+        command_buffer_allocate_info.commandBufferCount = 1;
+
+        VkCommandBuffer command_buffer;
+        vkAllocateCommandBuffers(device_, &command_buffer_allocate_info, &command_buffer);
+
+        VkCommandBufferBeginInfo command_buffer_begin_info = {};
+        command_buffer_begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        command_buffer_begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+        vkBeginCommandBuffer(command_buffer, &command_buffer_begin_info);
+
+        VkBufferCopy copy_region = {};
+        copy_region.srcOffset = 0; // Optional
+        copy_region.dstOffset = 0; // Optional
+        copy_region.size = size;
+        vkCmdCopyBuffer(command_buffer, src_buffer, dst_buffer, 1, &copy_region);
+
+        vkEndCommandBuffer(command_buffer);
+
+        VkSubmitInfo submit_info = {};
+        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submit_info.commandBufferCount = 1;
+        submit_info.pCommandBuffers = &command_buffer;
+
+        vkQueueSubmit(graphics_queue_, 1, &submit_info, nullptr);
+        vkQueueWaitIdle(graphics_queue_);
+
+        vkFreeCommandBuffers(device_, command_pool_, 1, &command_buffer);
     }
 
     uint32_t find_memory_type(uint32_t type_filter, VkMemoryPropertyFlags property_flags) {
