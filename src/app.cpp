@@ -793,7 +793,12 @@ private:
             // • VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: The render pass commands will be executed from secondary command buffers.
             vkCmdBeginRenderPass(command_buffers_[i], &render_pass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
             vkCmdBindPipeline(command_buffers_[i], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline_);
-            vkCmdDraw(command_buffers_[i], 3, 1, 0, 0);
+
+            VkBuffer vertex_buffers[] = {vertex_buffer_};
+            VkDeviceSize offsets[] = {0};
+            vkCmdBindVertexBuffers(command_buffers_[i], 0, 1, vertex_buffers, offsets);
+            
+            vkCmdDraw(command_buffers_[i], uint32_t(vertices.size()), 1, 0, 0);
             
             vkCmdEndRenderPass(command_buffers_[i]);
 
