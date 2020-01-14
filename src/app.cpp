@@ -857,6 +857,11 @@ private:
         }
 
         vkBindBufferMemory(device_, vertex_buffer_, vertex_device_memory_, 0);
+
+        void* data;
+        vkMapMemory(device_, vertex_device_memory_, 0, buffer_create_info.size, 0, &data);
+        memcpy(data, vertices.data(), size_t(buffer_create_info.size));
+        vkUnmapMemory(device_, vertex_device_memory_);
         return true;
     }
 
