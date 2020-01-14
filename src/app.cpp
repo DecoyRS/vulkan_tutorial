@@ -63,6 +63,7 @@ namespace
         FAILED_TO_CREATE_VERTEX_BUFFER,
         FAILED_TO_FIND_SUITABLE_MEMORY_TYPE,
         FAILED_TO_ALLOCATE_VERTEX_BUFFER_MEMORY,
+        FAILED_TO_CREATE_BUFFER,
     };
 
     void quit_application(ERRORS error) {
@@ -836,36 +837,46 @@ private:
         return true;
     }
 
-    bool create_vertex_buffer() {
+    bool create_buffer(const VkDeviceSize size, VkBufferUsageFlags usage_flags, VkMemoryPropertyFlags property_flags, VkBuffer &buffer, VkDeviceMemory& device_memory) {     
         VkBufferCreateInfo buffer_create_info = {};
         buffer_create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        buffer_create_info.size = sizeof(vertices[0]) * vertices.size();
-        buffer_create_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        buffer_create_info.size = size;
+        buffer_create_info.usage = usage_flags;
         buffer_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        if(vkCreateBuffer(device_, &buffer_create_info, nullptr, &vertex_buffer_) != VK_SUCCESS) {
-            quit_application(ERRORS::FAILED_TO_CREATE_VERTEX_BUFFER);
+        
+        if(vkCreateBuffer(device_, &buffer_create_info, nullptr, &buffer) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_CREATE_BUFFER);
             return false;
         }
 
         VkMemoryRequirements memory_requirements;
-        vkGetBufferMemoryRequirements(device_, vertex_buffer_, &memory_requirements);
+        vkGetBufferMemoryRequirements(device_, buffer, &memory_requirements);
 
         VkMemoryAllocateInfo memory_allocate_info = {};
         memory_allocate_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         memory_allocate_info.allocationSize = memory_requirements.size;
-        memory_allocate_info.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        memory_allocate_info.memoryTypeIndex = find_memory_type(memory_requirements.memoryTypeBits, property_flags);
 
-        if(vkAllocateMemory(device_, &memory_allocate_info, nullptr, &vertex_device_memory_) != VK_SUCCESS) {
+        if(vkAllocateMemory(device_, &memory_allocate_info, nullptr, &device_memory) != VK_SUCCESS) {
             quit_application(ERRORS::FAILED_TO_ALLOCATE_VERTEX_BUFFER_MEMORY);
             return false;
         }
 
-        vkBindBufferMemory(device_, vertex_buffer_, vertex_device_memory_, 0);
+        vkBindBufferMemory(device_, buffer, device_memory, 0);
 
+        return true;
+    }
+
+    bool create_vertex_buffer() {
+        const size_t buffer_size = sizeof(vertices[0]) * vertices.size();
+
+        bool result = create_buffer(buffer_size, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+            vertex_buffer_, vertex_device_memory_);
+        
         void* data;
-        vkMapMemory(device_, vertex_device_memory_, 0, buffer_create_info.size, 0, &data);
-        memcpy(data, vertices.data(), size_t(buffer_create_info.size));
+        vkMapMemory(device_, vertex_device_memory_, 0, buffer_size, 0, &data);
+        memcpy(data, vertices.data(), buffer_size);
         vkUnmapMemory(device_, vertex_device_memory_);
         return true;
     }
