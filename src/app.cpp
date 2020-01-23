@@ -4,6 +4,7 @@
 #include <cstdint> // have to include this here to pass 'uint32_t' to shaders
 #include "shader_bin/triangle_vert.hpp"
 #include "shader_bin/fill_triangle_frag.hpp"
+#include "shader_bin/sp_triangle_vert.hpp"
 
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -57,13 +58,13 @@ namespace
         FAILED_TO_CREATE_SYNC_OBJECTS,
         FAILED_TO_SUBMIT_DRAW_COMMAND_BUFFER,
         FAILED_TO_ACQUIRE_NEXT_IMAGE,
-        // ReSharper disable once CppEnumeratorNeverUsed
-        END,
         FAILED_TO_PRESENT_SWAP_CHAIN,
-        FAILED_TO_CREATE_VERTEX_BUFFER,
         FAILED_TO_FIND_SUITABLE_MEMORY_TYPE,
         FAILED_TO_ALLOCATE_VERTEX_BUFFER_MEMORY,
         FAILED_TO_CREATE_BUFFER,
+        // ReSharper disable once CppEnumeratorNeverUsed
+        END,
+        FAILED_TO_CREATE_DESCRIPTOR_SET_LAYOUR,
     };
 
     void quit_application(ERRORS error) {
@@ -99,6 +100,12 @@ namespace
             instance, "vkDestroyDebugUtilsMessengerEXT"));
         if (func != nullptr) func(instance, callback, pAllocator);
     }
+
+    struct UniformBufferObject {
+        glm::mat4 model;
+        glm::mat4 view;
+        glm::mat4 proj;
+    };
 
     struct Vertex
     {
@@ -971,6 +978,31 @@ private:
         return true;
     }
 
+    bool create_descriptor_set_layout() {
+        VkDescriptorSetLayoutBinding ubo_descriptor_set_layout_binding = {};
+        ubo_descriptor_set_layout_binding.binding = 0;
+        ubo_descriptor_set_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        ubo_descriptor_set_layout_binding.descriptorCount = 1;
+        ubo_descriptor_set_layout_binding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        ubo_descriptor_set_layout_binding.pImmutableSamplers = nullptr; // Optional
+
+        VkDescriptorSetLayoutCreateInfo descriptor_set_layout_create_info = {};
+        descriptor_set_layout_create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptor_set_layout_create_info.bindingCount = 1;
+        descriptor_set_layout_create_info.pBindings = &ubo_descriptor_set_layout_binding;
+
+        if(vkCreateDescriptorSetLayout(device_, &descriptor_set_layout_create_info, nullptr, &descriptor_set_layout_) != VK_SUCCESS) {
+            quit_application(ERRORS::FAILED_TO_CREATE_DESCRIPTOR_SET_LAYOUR);
+            return false;
+        }
+
+        VkPipelineLayoutCreateInfo pipeline_layout_create_info = {};
+        pipeline_layout_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        pipeline_layout_create_info.setLayoutCount = 1;
+        pipeline_layout_create_info.pSetLayouts = &descriptor_set_layout_;
+        return true;
+    }
+
     bool init_vulkan() {
         return
             create_instance() &&
@@ -981,6 +1013,7 @@ private:
             create_swap_chain() &&
             create_image_views() &&
             create_render_pass() &&
+            create_descriptor_set_layout() &&
             create_graphics_pipeline() &&
             create_framebuffers() &&
             create_command_pool() &&
@@ -1090,6 +1123,8 @@ private:
     void cleanup() {        
         cleanup_swap_chain();
 
+        vkDestroyDescriptorSetLayout(device_, descriptor_set_layout_, nullptr);
+        
         vkDestroyBuffer(device_, vertex_buffer_, nullptr);
         vkFreeMemory(device_, vertex_device_memory_, nullptr);
 
@@ -1194,6 +1229,7 @@ private:
     VkExtent2D swap_chain_extent_;
 
     VkRenderPass render_pass_;
+    VkDescriptorSetLayout descriptor_set_layout_;
     VkPipelineLayout pipeline_layout_;
     VkPipeline pipeline_;
     VkCommandPool command_pool_;
