@@ -402,6 +402,7 @@ private:
             create_render_pass() &&
             create_graphics_pipeline() &&
             create_framebuffers() &&
+            create_uniform_buffers() &&
             create_command_buffers();
     }
 
@@ -1003,6 +1004,22 @@ private:
         return true;
     }
 
+    bool create_uniform_buffers() {
+        const VkDeviceSize buffer_size = sizeof(UniformBufferObject);
+
+        uniform_buffers_.resize(swap_chain_images_.size());
+        uniform_device_memory_.resize(swap_chain_images_.size());
+
+        for(size_t i = 0; i < swap_chain_images_.size(); i++) {
+            create_buffer(buffer_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                uniform_buffers_[i],
+                uniform_device_memory_[i]);
+        }
+        
+        return true;
+    }
+
     bool init_vulkan() {
         return
             create_instance() &&
@@ -1019,6 +1036,7 @@ private:
             create_command_pool() &&
             create_vertex_buffer() &&
             create_index_buffer() &&
+            create_uniform_buffers() &&
             create_command_buffers() &&
             create_sync_objects();
     }
@@ -1103,6 +1121,10 @@ private:
 
     void cleanup_swap_chain()
     {
+        for(size_t i = 0; i < swap_chain_images_.size(); i++) {
+            vkDestroyBuffer(device_, uniform_buffers_[i], nullptr);
+            vkFreeMemory(device_, uniform_device_memory_[i], nullptr);
+        }
         for (auto swap_chain_framebuffer : swap_chain_framebuffers_) {
             vkDestroyFramebuffer(device_, swap_chain_framebuffer, nullptr);
         }
@@ -1246,6 +1268,8 @@ private:
     VkDeviceMemory vertex_device_memory_;
     VkBuffer index_buffer_;
     VkDeviceMemory index_device_memory_;
+    std::vector<VkBuffer> uniform_buffers_;
+    std::vector<VkDeviceMemory> uniform_device_memory_;
 
     size_t current_frame = 0;
 
