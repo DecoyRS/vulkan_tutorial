@@ -11,8 +11,11 @@
 
 #define GLM_FORCE_RADIANS
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 
+#include <chrono>
 #include <vector>
 #include <iostream>
 #include <unordered_set>
@@ -1041,6 +1044,25 @@ private:
             create_sync_objects();
     }
 
+    void update_uniform_buffer(uint32_t image_index) {
+        static auto start_time = std::chrono::high_resolution_clock::now();
+
+        const auto current_time = std::chrono::high_resolution_clock::now();
+        float time = std::chrono::duration<float, std::chrono::seconds::period>(current_time - start_time).count();
+
+        UniformBufferObject ubo = {};
+        ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.f, 0.f, 1.f));
+        ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
+        ubo.proj = glm::perspective(glm::radians(45.f), swap_chain_extent_.width/float(swap_chain_extent_.height), 0.1f, 10.f);
+        ubo.proj[1][1] *= -1;
+
+        void* data;
+        vkMapMemory(device_, uniform_device_memory_[current_frame], 0, sizeof(ubo),0, &data);
+        memcpy(data, &ubo, sizeof(ubo));
+        vkUnmapMemory(device_, uniform_device_memory_[current_frame]);
+        
+    }
+
     void draw_frame() {
         vkWaitForFences(device_, 1, &fences_[current_frame], VK_TRUE, std::numeric_limits<uint64_t>::max());        
         
@@ -1064,6 +1086,8 @@ private:
 
         // Mark the image as now being in use by this frame
         images_in_flight_[image_index] = fences_[current_frame];
+
+        update_uniform_buffer(image_index);
 
         VkSubmitInfo submit_info = {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
